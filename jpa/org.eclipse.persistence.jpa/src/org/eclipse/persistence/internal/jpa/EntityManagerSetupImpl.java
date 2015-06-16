@@ -105,11 +105,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 
 import javax.persistence.OptimisticLockException;
 import javax.persistence.PersistenceException;
@@ -120,6 +123,7 @@ import javax.persistence.metamodel.Metamodel;
 import javax.persistence.spi.ClassTransformer;
 import javax.persistence.spi.PersistenceUnitInfo;
 import javax.persistence.spi.PersistenceUnitTransactionType;
+import javax.sql.DataSource;
 
 import org.eclipse.persistence.annotations.IdValidation;
 import org.eclipse.persistence.config.BatchWriting;
@@ -1429,6 +1433,8 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
         }
     }
     
+    public void todo() {}
+    
     /**
      * Process all properties under "eclipselink.connection-pool.".
      * This allows for named connection pools.
@@ -1499,7 +1505,12 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                     ((DatabaseLogin)pool.getLogin()).useDataSource((String)entry.getValue());
                 } else if (attribute.equals(PersistenceUnitProperties.CONNECTION_POOL_JTA_DATA_SOURCE)) {
                     pool.setLogin(pool.getLogin().clone());
-                    ((DatabaseLogin)pool.getLogin()).useDataSource((String)entry.getValue());
+                    Hashtable env = new Hashtable();
+                    env.put("com.sun.enterprise.connectors.jndisuffix", "__pm");
+                    ((DatabaseLogin)pool.getLogin()).setConnector(
+                            new JNDIConnector((DataSource)new InitialContext(env).lookup((String)entry.getValue())));
+                    ((DatabaseLogin)pool.getLogin()).useExternalConnectionPooling();
+//                    ((DatabaseLogin)pool.getLogin()).useDataSource((String)entry.getValue());
                 } else if (attribute.equals(PersistenceUnitProperties.CONNECTION_POOL_USER)) {
                     pool.setLogin(pool.getLogin().clone());
                     ((DatabaseLogin)pool.getLogin()).setUserName((String)entry.getValue());
@@ -1531,6 +1542,8 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                     }
                 }
             } catch (RuntimeException exception) {
+                this.session.handleException(ValidationException.invalidValueForProperty(entry.getValue(), entry.getKey(), exception));
+            } catch (NamingException exception) {
                 this.session.handleException(ValidationException.invalidValueForProperty(entry.getValue(), entry.getKey(), exception));
             }
         }
