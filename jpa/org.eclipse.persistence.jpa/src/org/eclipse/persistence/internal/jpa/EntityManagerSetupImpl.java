@@ -119,11 +119,15 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import javax.sql.DataSource;
 import java.util.concurrent.ConcurrentMap;
 
 import javax.persistence.OptimisticLockException;
@@ -1567,8 +1571,12 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                     pool.setLogin(pool.getLogin().clone());
                     ((DatabaseLogin)pool.getLogin()).useDataSource((String)entry.getValue());
                 } else if (attribute.equals(PersistenceUnitProperties.CONNECTION_POOL_JTA_DATA_SOURCE)) {
-                    pool.setLogin(pool.getLogin().clone());
-                    ((DatabaseLogin)pool.getLogin()).useDataSource((String)entry.getValue());
+                    Hashtable env = new Hashtable();
+                    env.put("com.sun.enterprise.connectors.jndisuffix", "__pm");
+                    ((DatabaseLogin)pool.getLogin()).setConnector(
+                            new JNDIConnector((DataSource)new InitialContext(env).lookup((String)entry.getValue())));
+                    ((DatabaseLogin)pool.getLogin()).useExternalConnectionPooling();
+                    //((DatabaseLogin)pool.getLogin()).useDataSource((String)entry.getValue());
                 } else if (attribute.equals(PersistenceUnitProperties.CONNECTION_POOL_USER)) {
                     pool.setLogin(pool.getLogin().clone());
                     ((DatabaseLogin)pool.getLogin()).setUserName((String)entry.getValue());
@@ -1600,6 +1608,8 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                     }
                 }
             } catch (RuntimeException exception) {
+                this.session.handleException(ValidationException.invalidValueForProperty(entry.getValue(), entry.getKey(), exception));
+            } catch (NamingException exception) {
                 this.session.handleException(ValidationException.invalidValueForProperty(entry.getValue(), entry.getKey(), exception));
             }
         }
