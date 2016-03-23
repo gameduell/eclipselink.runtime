@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,8 @@ import javax.management.openmbean.SimpleType;
 import javax.management.openmbean.TabularData;
 import javax.management.openmbean.TabularDataSupport;
 import javax.management.openmbean.TabularType;
+import javax.naming.InitialContext;
+import javax.sql.DataSource;
 
 import org.eclipse.persistence.descriptors.ClassDescriptor;
 import org.eclipse.persistence.internal.databaseaccess.DatabaseAccessor;
@@ -59,8 +62,10 @@ import org.eclipse.persistence.logging.SessionLog;
 import org.eclipse.persistence.platform.server.JMXEnabledPlatform;
 import org.eclipse.persistence.sessions.DatabaseLogin;
 import org.eclipse.persistence.sessions.DefaultConnector;
+import org.eclipse.persistence.sessions.JNDIConnector;
 import org.eclipse.persistence.sessions.Session;
 import org.eclipse.persistence.sessions.server.ConnectionPool;
+import org.eclipse.persistence.sessions.server.ExternalConnectionPool;
 import org.eclipse.persistence.sessions.server.ServerSession;
 import org.eclipse.persistence.tools.profiler.PerformanceProfiler;
 
@@ -293,6 +298,37 @@ public abstract class RuntimeServices {
     }
 
     /**
+     * This method provides client with access to add a new connection pool with JTA support to a EclipseLink
+     * ServerSession.
+     *
+     * @param poolName the name of the new pool
+     * @param jtaJdbcJNDI the jndi of the JTA connection
+     */
+    public void addNewJTAConnectionPool(String poolName, String jtaJdbcJNDI){
+        if (ClassConstants.ServerSession_Class.isAssignableFrom(getSession().getClass())) {
+            ServerSession serverSession = ((ServerSession) getSession());
+            try {
+                ConnectionPool pool = serverSession.getConnectionPool(poolName);
+                if (pool == null) {
+                    pool = new ExternalConnectionPool(poolName, serverSession.getDatasourceLogin(), serverSession);
+                }
+                pool.setLogin(pool.getLogin().clone());
+
+                Hashtable env = new Hashtable();
+                env.put("com.sun.enterprise.connectors.jndisuffix", "__pm");
+
+                ((DatabaseLogin)pool.getLogin()).setConnector(
+                        new JNDIConnector((DataSource)new InitialContext(env).lookup(jtaJdbcJNDI)));
+                ((DatabaseLogin)pool.getLogin()).useExternalConnectionPooling();
+                pool.startUp();
+                serverSession.addConnectionPool(pool);
+            } catch (Throwable e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /**
      * This method is used to reset connections from the session to the database.  Please
      * Note that this will not work with a SessionBroker at this time
      */
@@ -323,6 +359,7 @@ public abstract class RuntimeServices {
      * This method will return a collection of the objects in the Identity Map.
      * There is no particular order to these objects.
      * @param className the fully qualified classname of the class to the instances of
+     * @exception  ClassNotFoundException thrown then the IdentityMap for that class name could not be found
      * @exception ClassNotFoundException thrown then the IdentityMap for that class name could not be found
      */
     public List getObjectsInIdentityMap(String className) throws ClassNotFoundException {
@@ -1065,6 +1102,7 @@ public abstract class RuntimeServices {
      *        This method will log the objects in the Identity Map.
      * There is no particular order to these objects.
      * @param className the fully qualified classname identifying the identity map
+     * @exception  printObjectsInIdentityMap thrown then the IdentityMap for that class name could not be found
      * @exception ClassNotFoundException thrown then the IdentityMap for that class name could not be found
      */
      public void printObjectsInIdentityMap(String className) throws ClassNotFoundException {

@@ -29,5 +29,5 @@ import org.eclipse.persistence.services.mbean.MBeanRuntimeServicesMBean;
  * @since EclipseLink 2.1.1
  */
 public interface MBeanGlassfishRuntimeServicesMBean extends MBeanRuntimeServicesMBean {
-
+    void addNewJTAConnectionPool(String poolName, String jtaJdbcJNDI);
 }
